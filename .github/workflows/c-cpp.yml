@@ -16,4 +16,4 @@ jobs:
     - name: cmake
       run: mkdir build && cd build && cmake .. && make
     - name: test
-      run: test -f isotp_sample
+      run: test -f build/isotp_sample
