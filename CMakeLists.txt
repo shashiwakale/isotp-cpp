@@ -6,17 +6,17 @@ set (CMAKE_CXX_STANDARD 14)
 #Project name
 project(isotp_sample)
 
-#Get src files
-FILE(GLOB SRC ./src/*.cpp)
-
 #Add include directories
 include_directories(./include)
 
+#add sub directory
+add_subdirectory(src)
+
 #Create executable
-add_executable(${PROJECT_NAME} ${SRC})
+add_executable(${PROJECT_NAME} main.cpp)
 
 #Link libraries
-target_link_libraries(${PROJECT_NAME} pthread)
+target_link_libraries(${PROJECT_NAME} pthread isotp15765)
 
 #Enable compiler flags
 target_compile_options(isotp_sample PRIVATE -Wall -Wextra -Wpedantic)

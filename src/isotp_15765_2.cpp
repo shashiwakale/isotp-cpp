@@ -9,15 +9,31 @@
 #include <chrono>
 
 #include "isotp_15765_2.h"
-//#include "spdlog/spdlog.h"
 
 namespace isotp
 {
 
+const std::string VERSION       = "1.0.0";
+const std::string AUTHOR        = "Shashikant Wakale";
+const std::string COPY_RIGHT    = "Copyright (c) 2023 shashiwakale";
+const std::string LICENSE       = "MIT License";
+const std::string LICENSE_INFO = "THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\n\
+         IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\n\
+         FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\n\
+         AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\n\
+         LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n\
+         OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\n\
+         SOFTWARE.";
+
+
 isotp15765::isotp15765(socketcan::SocketCAN *socketCAN, unsigned long srcAddr, unsigned long destAddr) :
         canHandle (socketCAN), srcID(srcAddr), destID(destAddr)
 {
-    //spdlog::set_level(spdlog::level::debug);
+    std::cout<<"[isotp]: Starting ISOTP 15765_2 v"<<VERSION<<std::endl;
+    std::cout<<"[isotp]: Author: "<<AUTHOR<<std::endl;
+    std::cout<<"[isotp]: "<<LICENSE<<std::endl;
+    std::cout<<"[isotp]: "<<COPY_RIGHT<<std::endl;
+    std::cout<<"[isotp]: "<<LICENSE_INFO<<std::endl;
     canReceiveThread = std::thread(&isotp15765::ReceiveThreadFunction, this);
 }
 
@@ -35,7 +51,7 @@ void isotp15765::ReceiveThreadFunction(void)
     {
         if(nullptr != canHandle && canHandle->ReceiveFrame(rxFrame) < 0)
         {
-            //spdlog::error("CAN receive error..");
+            std::cerr<<"CAN receive error..\n";
         }
         else
         {
@@ -50,7 +66,7 @@ void isotp15765::ReceiveThreadFunction(void)
     }
 }
 
-std::vector<unsigned char> isotp15765::GetCANMessage(void)
+std::vector<unsigned char> isotp15765::GetCANMessage(const long waitDuration)
 {
     std::vector<unsigned char> receivedData;
     bool stopReception = false;
@@ -61,7 +77,7 @@ std::vector<unsigned char> isotp15765::GetCANMessage(void)
     while(!stopReception)
     {
         std::unique_lock<std::mutex> lk(m);
-        cv.wait(lk, [this]{ return (!messageQueue.empty()); });
+        cv.wait_for(lk,std::chrono::milliseconds (waitDuration), [this]{ return (!messageQueue.empty()); });
 
         if(!messageQueue.empty())
         {
@@ -79,7 +95,6 @@ std::vector<unsigned char> isotp15765::GetCANMessage(void)
                         receivedData.push_back (message.data[i]);
                     }
                     stopReception = true;
-                    bytesToBeReceived = 0;
                     break;
                 case FIRST_FRAME:
                     /*Get number of bytes to be received*/
@@ -131,6 +146,8 @@ std::vector<unsigned char> isotp15765::GetCANMessage(void)
         else
         {
             /*Timeout*/
+            std::cerr<< "[isotp]: ISOTP Timeout..\n";
+            stopReception = true;
         }
     }
 
@@ -170,11 +187,21 @@ isotp_message isotp15765::isotp_send(const std::vector<unsigned char>& data)
     return responseMessage;
 }
 
+isotp_message isotp15765::isotp_receive(void)
+{
+    isotp_message responseMessage;
+    /*Block Here for response*/
+    responseMessage.data = GetCANMessage();
+    responseMessage.responseCode = SUCCESS;
+    return responseMessage;
+}
+
 int isotp15765::SendConsecutiveData(std::vector<unsigned char>& data)
 {
     int returnCode = SUCCESS;
     bool stopSending = false;
     unsigned int totalBlockSent = 0;
+    unsigned char flag = 10;
     unsigned int blockToBeSent = (data.size () / CONSECUTIVE_FRAME_MAX_LENGTH);
 
     /*Erase first 6 Bytes*/
@@ -215,13 +242,36 @@ int isotp15765::SendConsecutiveData(std::vector<unsigned char>& data)
     {
         /*Block Here for Flow Control*/
         std::vector<unsigned char> response = GetCANMessage();
-        unsigned char flag = response.at (0) & SECOND_NIBBLE_MASK;
+
+        if(response.empty())
+        {
+            stopSending = true;
+            returnCode = SEND_ERROR;
+        }
+        else
+        {
+            try{
+                flag = response.at (0) & SECOND_NIBBLE_MASK;
+            }
+            catch(const std::out_of_range& err){
+                std::cout<<"[isotp]: exception, out of range response: "<<err.what()<<std::endl;
+            }
+        }
+
         if(CTS == flag)
         {
-            unsigned char blockSize = response.at (1);
-            unsigned char separationTime = response.at (2);
-            unsigned int totalBlocks = (blockToBeSent - totalBlockSent);
+            unsigned char blockSize = 0;
+            unsigned char separationTime = DEFAULT_SEPARATION_TIME;
 
+            try{
+                blockSize = response.at (1);
+                separationTime = response.at (2);
+            }
+            catch(const std::out_of_range& err){
+                std::cout<<"[isotp]: exception, out of range response: "<<err.what()<<std::endl;
+            }
+
+            unsigned int totalBlocks = (blockToBeSent - totalBlockSent);
 
             if(blockSize != SEND_ALL_BLKS_WO_INT)
             {
@@ -260,7 +310,6 @@ int isotp15765::SendSingleFrame(const std::vector<unsigned char>& data)
 {
     unsigned char dataBytes[8] = {0};
     dataBytes[0] = SINGLE_FRAME | (unsigned char)data.size();
-    //spdlog::debug("Sending single frame..");
     /*Copy Data*/
     memcpy(&dataBytes[1], data.data(), data.size());
 
@@ -279,7 +328,6 @@ int isotp15765::SendFirstFrame(const std::vector<unsigned char>& data)
     unsigned char dataBytes[8] = {0};
     dataBytes[0] = FIRST_FRAME | ((data.size()>>8) & SECOND_NIBBLE_MASK);
     dataBytes[1] = data.size() & BYTE_MASK;
-    //spdlog::debug("Sending first frame..");
     /*Copy Data*/
     memcpy(&dataBytes[2], data.data(), FIRST_FRAME_MAX_LENGTH);
 
@@ -295,14 +343,12 @@ int isotp15765::SendFirstFrame(const std::vector<unsigned char>& data)
 
 int isotp15765::SendConsecutiveFrame(const std::vector<unsigned char>& data, unsigned char sequenceNumber)
 {
-    //spdlog::debug("Sending consecutive frame..");
     unsigned char dataBytes[8] = {0};
     int frameSize = CONSECUTIVE_FRAME_MAX_LENGTH;
     if(data.size()< CONSECUTIVE_FRAME_MAX_LENGTH)
         frameSize = data.size();
 
     dataBytes[0] = CONSECUTIVE_FRAME | (sequenceNumber & SECOND_NIBBLE_MASK);
-    //spdlog::debug("Sending first frame..");
     /*Copy Data*/
     memcpy(&dataBytes[1], data.data(), frameSize);
 
@@ -319,7 +365,6 @@ int isotp15765::SendConsecutiveFrame(const std::vector<unsigned char>& data, uns
 
 int isotp15765::SendFlowControl(unsigned char flag, unsigned char blockSize, unsigned char separationTime)
 {
-    //spdlog::debug("Sending flow control frame..");
     unsigned char dataBytes[8] = {0};
     dataBytes[0] = FLOW_CONTROL_FRAME | (flag & SECOND_NIBBLE_MASK);
     dataBytes[1] = blockSize & BYTE_MASK;
