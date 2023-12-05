@@ -57,6 +57,10 @@ constexpr unsigned char CTS                     = 0;
 constexpr unsigned char WAIT                    = 1;
 constexpr unsigned char OVFLW                   = 2;
 constexpr unsigned char RES                     = 3;
+/*SID*/
+constexpr unsigned char NEGATIVE_RESPONSE_FRAME = 0x7F;
+/*NRC*/
+constexpr unsigned char NRC_RESPONSE_PENDING    = 0x78;
 
 /*isotp message*/
 struct isotp_message

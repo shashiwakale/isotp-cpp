@@ -32,7 +32,7 @@ class Iisotp15765
 {
 public:
     virtual  ~Iisotp15765(){}
-    virtual isotp_message isotp_send(const std::vector<unsigned char>& data) = 0;
+    virtual isotp_message isotp_send(const std::vector<unsigned char>& data, bool wait = true) = 0;
     virtual isotp_message isotp_receive(void) = 0;
 };
 

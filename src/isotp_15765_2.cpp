@@ -26,7 +26,7 @@ const std::string LICENSE_INFO = "THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WA
          SOFTWARE.";
 
 
-isotp15765::isotp15765(socketcan::SocketCAN *socketCAN, unsigned long srcAddr, unsigned long destAddr) :
+isotp15765::isotp15765(socketcan::SocketCAN *socketCAN, unsigned int srcAddr, unsigned int destAddr, bool ext) :
         canHandle (socketCAN), srcID(srcAddr), destID(destAddr)
 {
     std::cout<<"[isotp]: Starting ISOTP 15765_2 v"<<VERSION<<std::endl;
@@ -34,7 +34,16 @@ isotp15765::isotp15765(socketcan::SocketCAN *socketCAN, unsigned long srcAddr, u
     std::cout<<"[isotp]: "<<LICENSE<<std::endl;
     std::cout<<"[isotp]: "<<COPY_RIGHT<<std::endl;
     std::cout<<"[isotp]: "<<LICENSE_INFO<<std::endl;
+
+    if(ext)
+    {
+        srcID = srcID | CAN_EFF_FLAG;
+        destAddr = destAddr | CAN_EFF_FLAG;
+        extendedID = true;
+    }
+
     canReceiveThread = std::thread(&isotp15765::ReceiveThreadFunction, this);
+
 }
 
 isotp15765::~isotp15765()
@@ -55,6 +64,12 @@ void isotp15765::ReceiveThreadFunction(void)
         }
         else
         {
+            if(extendedID)
+            {
+                /*To get the ID only without flags*/
+                rxFrame.can_id = rxFrame.can_id & CAN_EFF_MASK;
+            }
+
             if(destID == rxFrame.can_id)
             {
                 /*Check CAN Frame*/
@@ -90,11 +105,19 @@ std::vector<unsigned char> isotp15765::GetCANMessage(const long waitDuration)
             {
                 case SINGLE_FRAME:
                     bytesToBeReceived = (message.data[0] & SECOND_NIBBLE_MASK)+1;
-                    for(int i = 1; i < bytesToBeReceived; i++)
+
+                    if(message.data[1] == NEGATIVE_RESPONSE_FRAME && message.data[3] == NRC_RESPONSE_PENDING)
                     {
-                        receivedData.push_back (message.data[i]);
+                        /*Wait for response*/
                     }
-                    stopReception = true;
+                    else
+                    {
+                        for(int i = 1; i < bytesToBeReceived; i++)
+                        {
+                            receivedData.push_back (message.data[i]);
+                        }
+                        stopReception = true;
+                    }
                     break;
                 case FIRST_FRAME:
                     /*Get number of bytes to be received*/
@@ -154,9 +177,14 @@ std::vector<unsigned char> isotp15765::GetCANMessage(const long waitDuration)
     return receivedData;
 }
 
-isotp_message isotp15765::isotp_send(const std::vector<unsigned char>& data)
+isotp_message isotp15765::isotp_send(const std::vector<unsigned char>& data, bool wait)
 {
     isotp_message responseMessage;
+
+    std::unique_lock<std::mutex> protect(receiveFuncProtection);
+
+    if(!wait)
+        protect.unlock();
 
     if(data.size () > ISOTP_MAX_DATA_LENGTH)
     {
@@ -170,8 +198,12 @@ isotp_message isotp15765::isotp_send(const std::vector<unsigned char>& data)
 
         if(SUCCESS == SendConsecutiveData(localData))
         {
-            responseMessage.data = GetCANMessage();
-            responseMessage.responseCode = SUCCESS;
+            if(wait)
+                responseMessage.data = GetCANMessage();
+        }
+        else
+        {
+            responseMessage.responseCode = SEND_ERROR;
         }
     }
     else
@@ -179,10 +211,18 @@ isotp_message isotp15765::isotp_send(const std::vector<unsigned char>& data)
         /*Send Single Frame*/
         SendSingleFrame(data);
 
-        /*Block Here for response*/
-        responseMessage.data = GetCANMessage();
-        responseMessage.responseCode = SUCCESS;
+        if(wait)
+            /*Block Here for response*/
+            responseMessage.data = GetCANMessage();
     }
+
+    if(!responseMessage.data.empty())
+         responseMessage.responseCode = SUCCESS;
+     else
+         responseMessage.responseCode = SEND_ERROR;
+
+    if(!wait)
+        responseMessage.responseCode = SUCCESS;
 
     return responseMessage;
 }
@@ -190,6 +230,7 @@ isotp_message isotp15765::isotp_send(const std::vector<unsigned char>& data)
 isotp_message isotp15765::isotp_receive(void)
 {
     isotp_message responseMessage;
+    std::unique_lock<std::mutex> protect(receiveFuncProtection);
     /*Block Here for response*/
     responseMessage.data = GetCANMessage();
     responseMessage.responseCode = SUCCESS;
@@ -243,19 +284,25 @@ int isotp15765::SendConsecutiveData(std::vector<unsigned char>& data)
         /*Block Here for Flow Control*/
         std::vector<unsigned char> response = GetCANMessage();
 
-        if(response.empty())
+        try
         {
-            stopSending = true;
-            returnCode = SEND_ERROR;
-        }
-        else
-        {
-            try{
+            if(response.empty())
+            {
+                stopSending = true;
+                returnCode = SEND_ERROR;
+            }
+            else if((response.at(0) & FIRST_NIBBLE_MASK) != FLOW_CONTROL_FRAME)
+            {
+                flag = 11;
+                returnCode = SEND_ERROR;
+            }
+            else
+            {
                 flag = response.at (0) & SECOND_NIBBLE_MASK;
             }
-            catch(const std::out_of_range& err){
-                std::cout<<"[isotp]: exception, out of range response: "<<err.what()<<std::endl;
-            }
+        }
+        catch(const std::out_of_range& err){
+            std::cout<<"[isotp]: exception, out of range response: "<<err.what()<<std::endl;
         }
 
         if(CTS == flag)
@@ -294,6 +341,10 @@ int isotp15765::SendConsecutiveData(std::vector<unsigned char>& data)
             /*Overflow, abort the operation*/
             returnCode = SEND_ERROR;
             stopSending = true;
+        }
+        else if(11 == flag)
+        {
+            std::cout<<"Unwanted frame received..";
         }
         else
         {

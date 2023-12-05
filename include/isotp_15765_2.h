@@ -38,16 +38,18 @@ namespace isotp
 class isotp15765 : public Iisotp15765
 {
 public:
-    isotp15765(socketcan::SocketCAN* socketCAN, unsigned long srcAddr, unsigned long destAddr);
+    isotp15765(socketcan::SocketCAN* socketCAN, unsigned int srcAddr, unsigned int destAddr, bool ext = false);
     ~isotp15765();
-    isotp_message isotp_send(const std::vector<unsigned char>& data) override;
+    isotp_message isotp_send(const std::vector<unsigned char>& data, bool wait = true) override;
     isotp_message isotp_receive(void) override;
 
 private:
     std::mutex m;
+    std::mutex receiveFuncProtection;
     socketcan::SocketCAN* canHandle = nullptr;
-    unsigned long srcID;
-    unsigned long destID;
+    unsigned int srcID;
+    unsigned int destID;
+    bool extendedID = false;
     bool exitThread = false;
     std::condition_variable cv;
     std::thread canReceiveThread;
