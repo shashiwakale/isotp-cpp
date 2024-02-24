@@ -25,9 +25,9 @@ SocketCAN::SocketCAN(const std::string& p_ref_strInterface, long p_lnBaudRate)
     {
         struct can_filter rfilter[2];
 
-        rfilter[0].can_id   = 0x18DA00FB | CAN_EFF_FLAG;;
+        rfilter[0].can_id   = 0x18DA00FA | CAN_EFF_FLAG;;
         rfilter[0].can_mask = (CAN_EFF_FLAG | CAN_RTR_FLAG | CAN_EFF_MASK);
-        rfilter[1].can_id   = 0x18DAFB00 | CAN_EFF_FLAG;
+        rfilter[1].can_id   = 0x18DAFA00 | CAN_EFF_FLAG;
         rfilter[1].can_mask = (CAN_EFF_FLAG | CAN_RTR_FLAG | CAN_EFF_MASK);
 
         setsockopt(sc, SOL_CAN_RAW, CAN_RAW_FILTER, &rfilter, sizeof(rfilter));

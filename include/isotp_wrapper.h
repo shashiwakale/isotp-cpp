@@ -24,7 +24,7 @@
 #include "isotp.h"
 #include "Iisotp.h"
 #include "isotp_wrapper_defines.h"
-
+#include "spdlog/spdlog.h"
 /******************************************************************************
  * Defines
  *****************************************************************************/
@@ -52,7 +52,6 @@ private:
     std::mutex m;
     unsigned int srcID;
     unsigned int destID;
-    bool extendedID = false;
     bool exitThread = false;
     std::condition_variable cv;
     std::thread canReceiveThread;
@@ -61,7 +60,7 @@ private:
 
     void poolingFunction()
     {
-        std::cout<<"starting polling thread\n";
+        spdlog::debug("starting polling thread...");
         while(1)
         {
             /* Poll link to handle multiple frame transmition */

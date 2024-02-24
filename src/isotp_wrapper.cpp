@@ -17,19 +17,14 @@ socketcan::SocketCAN* isotp::isotp15765::canHandle = nullptr;
 /* user implemented, print debug message */
 void isotp_user_debug(const char *message, ...)
 {
-    std::cout<< message<<std::endl;
+    spdlog::debug("{}", message);
 }
 
 /* user implemented, send can message. should return ISOTP_RET_OK when success.
  */
 int isotp_user_send_can(const uint32_t arbitration_id, const uint8_t *data, const uint8_t size)
 {
-//    std::cout<<"Sending can message with ID "<<std::hex<<arbitration_id<<std::endl;
-//    for(int i = 0; i < size; i++)
-//    {
-//        std::cout<<std::hex<<std::setw(2)<<std::setfill('0')<<(int)data[i]<<" ";
-//    }
-//    std::cout<<std::endl;
+    spdlog::debug("Sending can message with ID 0x{0:x}", arbitration_id);
 
     if(nullptr != isotp::isotp15765::canHandle)
     {
@@ -37,10 +32,11 @@ int isotp_user_send_can(const uint32_t arbitration_id, const uint8_t *data, cons
     }
     else
     {
-        std::cerr<<"CAN handle is null..\n";
+        spdlog::error("CAN handle is null..");
+        return ISOTP_RET_ERROR;
     }
 
-    return 0;
+    return ISOTP_RET_OK;
 }
 
 /* user implemented, get millisecond */
@@ -48,7 +44,7 @@ uint32_t isotp_user_get_ms(void)
 {
     struct timeval cateq_v;
     gettimeofday(&cateq_v, nullptr);
-    return (uint32_t)(1000.0 * (double)(cateq_v.tv_sec) + (double)(cateq_v.tv_usec) / 1000.0);
+    return (uint32_t)(((1000.0 * (double)(cateq_v.tv_sec)) + (double)(cateq_v.tv_usec)) / 1000.0);
 }
 
 namespace isotp
@@ -58,23 +54,14 @@ const std::string VERSION       = "1.0.0";
 const std::string AUTHOR        = "Shashikant Wakale";
 const std::string COPY_RIGHT    = "Copyright (c) 2023 shashiwakale";
 const std::string LICENSE       = "MIT License";
-const std::string LICENSE_INFO = "THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\n\
-         IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\n\
-         FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\n\
-         AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\n\
-         LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n\
-         OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\n\
-         SOFTWARE.";
-
 
 isotp15765::isotp15765(socketcan::SocketCAN *socketCAN, unsigned int srcAddr, unsigned int destAddr, bool ext) :
          srcID(srcAddr), destID(destAddr)
 {
-    std::cout<<"[isotp]: Starting ISOTP 15765_2 v"<<VERSION<<std::endl;
-    std::cout<<"[isotp]: Author: "<<AUTHOR<<std::endl;
-    std::cout<<"[isotp]: "<<LICENSE<<std::endl;
-    std::cout<<"[isotp]: "<<COPY_RIGHT<<std::endl;
-    std::cout<<"[isotp]: "<<LICENSE_INFO<<std::endl;
+    spdlog::info("Starting ISOTP 15765_2 v{}", VERSION);
+    spdlog::info("Author: {}", AUTHOR);
+    spdlog::info("{}", LICENSE);
+    spdlog::info("{}", COPY_RIGHT);
 
     this->canHandle = socketCAN;
 
@@ -82,7 +69,8 @@ isotp15765::isotp15765(socketcan::SocketCAN *socketCAN, unsigned int srcAddr, un
     {
         srcID = srcAddr | CAN_EFF_FLAG;
         destID = destAddr | CAN_EFF_FLAG;
-        extendedID = true;
+        spdlog::info("Source Address: 0x{0:x}", srcID);
+        spdlog::info("Destination Address: 0x{0:x} ", destID);
     }
 
     /* Initialize link, srcID is the CAN ID you send with */
@@ -111,18 +99,6 @@ void isotp15765::ReceiveThreadFunction(void)
         }
         else
         {
-//            if(extendedID)
-//            {
-//                /*To get the ID only without flags*/
-//                rxFrame.can_id = rxFrame.can_id & CAN_EFF_MASK;
-//            }
-//            std::cout<<"[Rx]"<<std::hex<<rxFrame.can_id<<"-> "<<destID<< " ";
-//            for(int i = 0; i < rxFrame.can_dlc; i++)
-//            {
-//                std::cout<<std::hex<<std::setw(2)<<std::setfill('0')<<(int)rxFrame.data[i]<<" ";
-//            }
-//            std::cout<<std::endl;
-
             if(destID == rxFrame.can_id)
             {
                 /*Sleep to avoid quick reply*/
@@ -173,7 +149,7 @@ std::vector<unsigned char> isotp15765::GetCANMessage(const long waitDuration)
     else
     {
         /*Timeout*/
-        std::cerr<< "[isotp]: ISOTP Timeout..\n";
+        spdlog::error("ISOTP Timeout..");
     }
 
     return receivedData;
@@ -186,10 +162,10 @@ isotp_message isotp15765::send(const std::vector<uint8_t>& data, bool wait)
     int ret = isotp_send(&g_link, data.data(), data.size());
     if (ISOTP_RET_OK == ret) {
         /* Send ok */
-        std::cout<<"Send Ok\n";
+        spdlog::info("Send Ok");
     } else {
         /* An error occured */
-        std::cout<<"Send error\n";
+        spdlog::error("Send error");
     }
 
     if(wait)
