@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdint.h>
 
 #include <net/if.h>
 #include <sys/ioctl.h>
@@ -33,7 +34,7 @@ public:
     SocketCAN(SocketCAN &other) = delete;
     void operator=(const SocketCAN &) = delete;
     static SocketCAN* OpenChannel(const std::string& interface, long baudRate);
-    int SendFrame(int identifier, unsigned char* data, int length);
+    int SendFrame(int identifier, const uint8_t* data, int length);
     int ReceiveFrame(struct can_frame& rxFrame);
 
 protected:

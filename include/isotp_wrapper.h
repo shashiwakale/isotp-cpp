@@ -1,10 +1,10 @@
-/*
- * isotp_15765_2.h
- *
- *  Created on: 25-Nov-2023
- *      Author: shashi
- */
-
+/******************************************************************************
+ * Name        : isotp_wrapper.h
+ * Author      : shashiwakale
+ * Version     : 1.0.0
+ * Copyright   : Copyright (c) 2024 shashiwakale
+ * Description : ISOTP Wrapper Implementation
+*****************************************************************************/
 #pragma once
 
 /******************************************************************************
@@ -19,8 +19,10 @@
  * Local includes
  *****************************************************************************/
 #include "socket_can.h"
-#include "isotp_defines.h"
-#include "Iisotp_15765.h"
+#include "isotp.h"
+#include "Iisotp.h"
+#include "isotp_wrapper_defines.h"
+#include "spdlog/spdlog.h"
 /******************************************************************************
  * Defines
  *****************************************************************************/
@@ -40,27 +42,42 @@ class isotp15765 : public Iisotp15765
 public:
     isotp15765(socketcan::SocketCAN* socketCAN, unsigned int srcAddr, unsigned int destAddr, bool ext = false);
     ~isotp15765();
-    isotp_message isotp_send(const std::vector<unsigned char>& data, bool wait = true) override;
-    isotp_message isotp_receive(void) override;
+    isotp_message send(const std::vector<uint8_t>& data, bool wait = true) override;
+    isotp_message receive(void) override;
+    static socketcan::SocketCAN* canHandle;
 
 private:
     std::mutex m;
-    std::mutex receiveFuncProtection;
-    socketcan::SocketCAN* canHandle = nullptr;
     unsigned int srcID;
     unsigned int destID;
-    bool extendedID = false;
     bool exitThread = false;
     std::condition_variable cv;
     std::thread canReceiveThread;
-    std::queue<struct can_frame> messageQueue;
+    std::thread pollingThreadThread;
+    std::queue<std::vector<unsigned char>> messageQueue;
+
+    void poolingFunction()
+    {
+        spdlog::debug("starting polling thread...");
+        while(1)
+        {
+            /* Poll link to handle multiple frame transmition */
+            isotp_poll(&g_link);
+            std::this_thread::sleep_for (std::chrono::milliseconds(10));
+        }
+    }
+
+    /*isotp defines*/
+    /* Alloc IsoTpLink statically in RAM */
+    IsoTpLink g_link;
+
+    /* Alloc send and receive buffer statically in RAM */
+    uint8_t g_isotpRecvBuf[ISOTP_BUFSIZE];
+    uint8_t g_isotpSendBuf[ISOTP_BUFSIZE];
+    uint8_t receivedPayload[ISOTP_BUFSIZE];
+    uint16_t receivedPayloadSize = 0;
 
     void ReceiveThreadFunction(void);
-    std::vector<unsigned char> GetCANMessage(const long waitDuration=WAIT_TIME);
-    int SendConsecutiveData(std::vector<unsigned char>& data);
-    int SendSingleFrame(const std::vector<unsigned char>& data);
-    int SendFirstFrame(const std::vector<unsigned char>& data);
-    int SendConsecutiveFrame(const std::vector<unsigned char>& data, unsigned char sequenceNumber);
-    int SendFlowControl(unsigned char flag, unsigned char blockSize, unsigned char separationTime);
+    std::vector<unsigned char> GetCANMessage(const long waitDuration=1000);
 };
 }

@@ -7,7 +7,8 @@ set (CMAKE_CXX_STANDARD 14)
 project(isotp_sample)
 
 #Add include directories
-include_directories(./include)
+include_directories(./include
+					./libs)
 
 #add sub directory
 add_subdirectory(src)

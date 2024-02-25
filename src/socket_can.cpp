@@ -23,6 +23,15 @@ SocketCAN::SocketCAN(const std::string& p_ref_strInterface, long p_lnBaudRate)
     }
     else
     {
+        struct can_filter rfilter[2];
+
+        rfilter[0].can_id   = 0x18DA00FA | CAN_EFF_FLAG;;
+        rfilter[0].can_mask = (CAN_EFF_FLAG | CAN_RTR_FLAG | CAN_EFF_MASK);
+        rfilter[1].can_id   = 0x18DAFA00 | CAN_EFF_FLAG;
+        rfilter[1].can_mask = (CAN_EFF_FLAG | CAN_RTR_FLAG | CAN_EFF_MASK);
+
+        setsockopt(sc, SOL_CAN_RAW, CAN_RAW_FILTER, &rfilter, sizeof(rfilter));
+
         strcpy(ifr.ifr_name, p_ref_strInterface.c_str());
         ioctl(sc, SIOCGIFINDEX, &ifr);
 
@@ -55,7 +64,7 @@ SocketCAN* SocketCAN::OpenChannel(const std::string& interface, long baudRate)
     return socketCAN;
 }
 
-int SocketCAN::SendFrame(int identifier, unsigned char* data, int length)
+int SocketCAN::SendFrame(int identifier, const uint8_t* data, int length)
 {
     if(8 < length)
     {

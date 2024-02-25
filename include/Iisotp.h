@@ -1,11 +1,12 @@
-/*
- * Iisotp_15765.h
- *
- *  Created on: 03-Dec-2023
- *      Author: shashi
- */
-
+/******************************************************************************
+ * Name        : isotp_wrapper.h
+ * Author      : shashiwakale
+ * Version     : 1.0.0
+ * Copyright   : Copyright (c) 2024 shashiwakale
+ * Description : ISOTP Wrapper Implementation
+*****************************************************************************/
 #pragma once
+
 /******************************************************************************
  * OS includes
  *****************************************************************************/
@@ -13,7 +14,8 @@
 /******************************************************************************
  * Local includes
  *****************************************************************************/
-#include "isotp_defines.h"
+#include "isotp_wrapper_defines.h"
+
 /******************************************************************************
  * Defines
  *****************************************************************************/
@@ -32,8 +34,8 @@ class Iisotp15765
 {
 public:
     virtual  ~Iisotp15765(){}
-    virtual isotp_message isotp_send(const std::vector<unsigned char>& data, bool wait = true) = 0;
-    virtual isotp_message isotp_receive(void) = 0;
+    virtual isotp_message send(const std::vector<uint8_t>& data, bool wait=true) = 0;
+    virtual isotp_message receive(void) = 0;
 };
 
 }
