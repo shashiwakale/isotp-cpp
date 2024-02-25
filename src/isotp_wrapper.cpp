@@ -1,19 +1,36 @@
-/*
- * isotp_15765_2.cpp
- *
- *  Created on: 25-Nov-2023
- *      Author: shashi
- */
+/******************************************************************************
+ * Name        : isotp_wrapper.cpp
+ * Author      : shashiwakale
+ * Version     : 1.0.0
+ * Copyright   : Copyright (c) 2024 shashiwakale
+ * Description : ISOTP Wrapper Implementation
+*****************************************************************************/
 
+/******************************************************************************
+ * OS Includes
+ *****************************************************************************/
 #include <iostream>
 #include <chrono>
 #include <iomanip>
 #include <sys/time.h>
 
+/******************************************************************************
+ * Local Includes
+ *****************************************************************************/
 #include "isotp_wrapper.h"
 
+/******************************************************************************
+ * Defines
+ *****************************************************************************/
+
+/******************************************************************************
+ * Global Variables
+ *****************************************************************************/
 socketcan::SocketCAN* isotp::isotp15765::canHandle = nullptr;
 
+/******************************************************************************
+ * ISOTP Library Specific User Implemented Functions
+ *****************************************************************************/
 /* user implemented, print debug message */
 void isotp_user_debug(const char *message, ...)
 {
@@ -47,14 +64,31 @@ uint32_t isotp_user_get_ms(void)
     return (uint32_t)(((1000.0 * (double)(cateq_v.tv_sec)) + (double)(cateq_v.tv_usec)) / 1000.0);
 }
 
+/******************************************************************************
+ * ISOTP Implementation
+ *****************************************************************************/
 namespace isotp
 {
 
 const std::string VERSION       = "1.0.0";
 const std::string AUTHOR        = "Shashikant Wakale";
-const std::string COPY_RIGHT    = "Copyright (c) 2023 shashiwakale";
+const std::string COPY_RIGHT    = "Copyright (c) 2024 shashiwakale";
 const std::string LICENSE       = "MIT License";
 
+/*
+ * Function Name            : isotp15765
+ * Function ID              : -
+ * Description              : isotp constructor
+ * Author                   : shashiwakale
+ * Date                     : 25-11-2023
+ * Global Arguments Modified: srcID, destID, canHandle, pollingThreadThread, canReceiveThread
+ * Global Arguments Refer   : -
+ * Arguments                : socketCAN - Socket CAN Pointer
+ *                            srcAddr - client CAN identifier
+ *                            destAddr - server CAN identifier
+ *                            ext - extended CAN id flag (true if extended)
+ * Return Value             : -
+ */
 isotp15765::isotp15765(socketcan::SocketCAN *socketCAN, unsigned int srcAddr, unsigned int destAddr, bool ext) :
          srcID(srcAddr), destID(destAddr)
 {
@@ -81,6 +115,17 @@ isotp15765::isotp15765(socketcan::SocketCAN *socketCAN, unsigned int srcAddr, un
 
 }
 
+/*
+ * Function Name            : ~isotp15765
+ * Function ID              : -
+ * Description              : Destructor
+ * Author                   : shashiwakale
+ * Date                     : 25-11-2023
+ * Global Arguments Modified: exitThread
+ * Global Arguments Refer   : canReceiveThread
+ * Arguments                : -
+ * Return Value             : int
+ */
 isotp15765::~isotp15765()
 {
     exitThread = true;
@@ -88,6 +133,18 @@ isotp15765::~isotp15765()
         canReceiveThread.join();
 }
 
+/*
+ * Function Name            : ReceiveThreadFunction
+ * Function ID              : -
+ * Description              : Function to receive CAN frames
+ * Author                   : shashiwakale
+ * Date                     : 25-11-2023
+ * Global Arguments Modified: -
+ * Global Arguments Refer   : exitThread, canHandle, destID, g_link,
+ *                            receivedPayload, receivedPayloadSize, messageQueue, cv
+ * Arguments                : -
+ * Return Value             : -
+ */
 void isotp15765::ReceiveThreadFunction(void)
 {
     struct can_frame rxFrame;
@@ -134,6 +191,17 @@ void isotp15765::ReceiveThreadFunction(void)
     }
 }
 
+/*
+ * Function Name            : GetCANMessage
+ * Function ID              : -
+ * Description              : Function to get isotp message synchronously
+ * Author                   : shashiwakale
+ * Date                     : 25-11-2023
+ * Global Arguments Modified: messageQueue
+ * Global Arguments Refer   : m, cv
+ * Arguments                : waitDuration - duration to wait for message
+ * Return Value             : vector<int> receivedData
+ */
 std::vector<unsigned char> isotp15765::GetCANMessage(const long waitDuration)
 {
     std::vector<unsigned char> receivedData;
@@ -149,12 +217,23 @@ std::vector<unsigned char> isotp15765::GetCANMessage(const long waitDuration)
     else
     {
         /*Timeout*/
-        spdlog::error("ISOTP Timeout..");
+        spdlog::warn("ISOTP Timeout..");
     }
 
     return receivedData;
 }
 
+/*
+ * Function Name            : send
+ * Function ID              : -
+ * Description              : Function to send isotp message
+ * Author                   : shashiwakale
+ * Date                     : 25-11-2023
+ * Global Arguments Modified: messageQueue
+ * Global Arguments Refer   : m, cv
+ * Arguments                : -
+ * Return Value             : isotp_message
+ */
 isotp_message isotp15765::send(const std::vector<uint8_t>& data, bool wait)
 {
     isotp_message responseMessage;
@@ -174,6 +253,17 @@ isotp_message isotp15765::send(const std::vector<uint8_t>& data, bool wait)
     return responseMessage;
 }
 
+/*
+ * Function Name            : receive
+ * Function ID              : -
+ * Description              : Function to receive isotp message asynchronously
+ * Author                   : shashiwakale
+ * Date                     : 25-11-2023
+ * Global Arguments Modified: -
+ * Global Arguments Refer   : -
+ * Arguments                : -
+ * Return Value             : isotp_message
+ */
 isotp_message isotp15765::receive()
 {
     isotp_message responseMessage;
